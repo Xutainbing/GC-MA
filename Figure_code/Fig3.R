@@ -84,9 +84,25 @@ library(ggplot2)
 library(ggpubr)
 library(ggsignif)
 library(patchwork)
+library(tidyverse)
+library(dplyr)
+
+# Extract relevant metadata
+df <- sce.Bcell@meta.data[, c("CellType", "patients", "sampleid", "group1")]
+
+# Calculate cell type proportions per sample
+df_ratio <- df %>%
+    count(sampleid, CellType) %>%
+    group_by(sampleid) %>%
+    mutate(percentage = n / sum(n) * 100) %>%
+    ungroup() %>%
+    mutate(ID = str_split_fixed(sampleid, "_", 2)[,1],
+           group = str_split_fixed(sampleid, "_", 2)[,2],
+           celltype = factor(CellType, levels = c("B naive", "B mem", "Plasma", "Plasma cycling", "AtM B")))
+
 
 # Define sample order and point shapes
-sample_names <- unique(df$ID)
+sample_names <- unique(df$sampleid)
 custom_shapes <- c(16, 17)
 
 # Function to draw boxplot with statistics
