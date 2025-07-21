@@ -421,14 +421,5 @@ pheatmap(gsva_avg,
          legend_args = list(legend = "right"))
 
 
-############# Fig3M-N - 
+############# Fig3M-N - B cell subtype signature survival analysis (TCGA & GSE15459)
 ## The code is the same as Fig. 2L.
-
-
-
-
-
-
-
-
-
