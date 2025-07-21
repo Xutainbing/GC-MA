@@ -155,11 +155,129 @@ p2 <- plot_group_comparison(df_ratio, "AtM B", y_limit = 20)
 p1 | p2
 
 
-############# Fig3D
+############# Fig3D - Ro/e enrichment heatmap
+
+library(ComplexHeatmap)
+library(circlize)
+library(grid)
+
+# Load Ro/e distribution function
+source("distribution_Roe.R")
+
+# Extract metadata
+meta <- sce.Bcell@meta.data
+
+# Calculate Ro/e enrichment
+roe <- calTissueDist(
+    dat.tb = meta,
+    byPatient = FALSE,
+    colname.cluster = "CellType",
+    colname.patient = "patients",
+    colname.tissue = "group1",
+    method = "chisq",
+    min.rowSum = 0
+)
+
+# Convert to data frame
+roe_df <- as.data.frame.matrix(roe)
+
+# Generate annotation symbols
+p=roe_df
+p[p > 1] <- "+++"
+p[p> 0.8 & p <= 1] <- "++"
+p[p>=0.2 & p <= 0.8] <- "+"
+p[p> 0 & p < 0.2] <- "+/−"
+p[p==0] <- "−"
+
+# Define color scale
+col_fun2 = colorRamp2(c(0, 0.2,0.8,1, 1.7), c("#3367A2", "#7FD0D8", "#FAE28C", "#FDB28F", "#FE9392"))
+
+cellwidth = 1
+cellheight = 1
+cn = dim(roe_df)[2]
+rn = dim(roe_df)[1]
+w=cellwidth*cn
+h=cellheight*rn
+
+# Plot heatmap
+Heatmap(roe_df,name ="Ro/e", col = col_fun2,
+        heatmap_legend_param = list(legend_height = unit(3, "cm"),
+                                    grid_width = unit(0.4, "cm"),
+                                    labels_gp = gpar(col = "gray20",
+                                                     fontsize = 8)),
+        cell_fun = function(j, i, x, y, width, height, fill) {
+            grid.text(p[i, j], x, y, vjust = 0.7,
+                      gp = gpar(fontsize = 13,col="black"))
+        })
 
 
+############# Fig3E - KEGG enrichment and GOcircle plot for B mem cells
 
+library(Seurat)
+library(dplyr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
 
+# Subset B memory cells and set identity
+sce.Bcell_bm <- subset(sce.Bcell, CellType == "B mem")
+Idents(sce.Bcell_bm) <- "group1"
+
+# Differential gene expression between AF and PBMC groups
+deg_bm <- FindMarkers(sce.Bcell_bm, ident.1 = "AF", ident.2 = "PBMC", 
+                      min.pct = 0.25, logfc.threshold = 0.25)
+deg_bm <- deg_bm[order(deg_bm$avg_log2FC, decreasing = TRUE), ]
+deg_genes <- rownames(deg_bm)
+
+# Map gene symbols to ENTREZ IDs
+entrez_ids <- mapIds(org.Hs.eg.db, 
+                     keys = deg_genes,
+                     keytype = "SYMBOL", 
+                     column = "ENTREZID")
+
+# KEGG enrichment
+kegg_res <- enrichKEGG(gene = entrez_ids,
+                       organism = "hsa",
+                       keyType = "kegg",
+                       pvalueCutoff = 0.05,
+                       qvalueCutoff = 0.05)
+
+# Select specific KEGG terms by row index (can be adjusted)
+df <- kegg_res@result[c(1, 5, 7, 13, 23, 27, 28, 45, 90, 92), ]
+
+# Combine DEGs and KEGG terms
+enrich_df <- deg_bm %>%
+  mutate(SYMBOL = rownames(.)) %>%
+  inner_join(diff.df, by = "SYMBOL") %>%  # Make sure diff.df is defined beforehand
+  dplyr::select(SYMBOL, ENTREZID, avg_log2FC)
+
+# Format for GOplot
+kegg_plot_df <- data.frame(
+  Category = "KEGG",
+  ID = df$ID,
+  Term = df$Description,
+  Genes = gsub("/", ", ", df$geneID),
+  adj_pval = df$pvalue
+)
+
+genelist <- data.frame(
+  ID = enrich_df$ENTREZID,
+  logFC = enrich_df$avg_log2FC
+)
+
+# Generate GOcircle input and plot
+circ_data <- circle_dat(kegg_plot_df, genelist)
+
+GOBubble(circ_data,
+         colour = c('skyblue', 'pink', 'red'),
+         display = 'single',
+         labels = 1,
+         table.legend = FALSE) +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    aspect.ratio = 1,
+    panel.spacing = unit(0.2, "lines")
+  ) +
+  coord_cartesian(xlim = c(-3, 3), ylim = c(0, 12), expand = FALSE)
 
 
 
