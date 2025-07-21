@@ -223,14 +223,18 @@ DimPlot(sce.Tcell, group.by = "cloneSize") +
         title = NULL,
         color = "Clone Size"
     ) +
+    theme_minimal(base_size = 12) +
     theme(
-        panel.border = element_rect(fill = NA, color = "black", linewidth = 2),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        text = element_text(size = 20),
-        legend.title = element_text(size = 15, face = "bold"),
-        legend.text = element_text(size = 12, face = "italic")
-    ) +
+        panel.border     = element_rect(fill = NA, color = "black", size = 1),
+        axis.text        = element_blank(),
+        axis.ticks       = element_blank(),
+        axis.line        = element_blank(),
+        panel.grid       = element_blank()
+    )  +
     guides(colour = guide_legend(override.aes = list(size = 4)))
+
+
+############# Fig2E
+
 
 
