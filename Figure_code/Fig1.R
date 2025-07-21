@@ -73,67 +73,44 @@ VlnPlot(sce.all,
     )
 
 
-############# Fig1F - Ro/e enrichment heatmap
+############# Fig1D - COSG heatmap of top markers
 
-library(ComplexHeatmap)
-library(circlize)
-library(grid)
+library(COSG)
+library(dplyr)
+library(purrr)
 
-# Load Ro/e distribution function
-source("distribution_Roe.R")
+# Set identity
+Idents(sce.all) <- sce.all$celltype
 
-# Extract metadata
-meta <- sce.all@meta.data
-
-# Calculate Ro/e enrichment
-roe <- calTissueDist(
-    dat.tb = meta,
-    byPatient = FALSE,
-    colname.cluster = "celltype",
-    colname.patient = "patients",
-    colname.tissue = "group1",
-    method = "chisq",
-    min.rowSum = 0
+# Run COSG marker detection
+marker_cosg <- cosg(
+    sce.all,
+    groups = "all",
+    assay = "RNA",
+    slot = "data",
+    mu = 1,
+    remove_lowly_expressed = TRUE,
+    expressed_pct = 0.1,
+    n_genes_user = 50
 )
 
-# Convert to data frame
-roe_df <- as.data.frame.matrix(roe)
+# Extract top 5 markers per cell type
+markers <- map(marker_cosg$names, ~ .x[1:5]) %>% unlist()
 
-# Generate annotation symbols
-symbols <- roe_df
-symbols[symbols > 1] <- "+++"
-symbols[symbols > 0.8 & symbols <= 1] <- "++"
-symbols[symbols >= 0.2 & symbols <= 0.8] <- "+"
-symbols[symbols > 0 & symbols < 0.2] <- "+/−"
-symbols[symbols == 0] <- "−"
+# Scale selected features
+subobj <- ScaleData(sce.all, features = markers, assay = "RNA")
 
-# Define color scale
-col_fun2 <- colorRamp2(
-    c(0, 0.2, 0.8, 1, max(roe_df)),
-    c("#3367A2", "#7FD0D8", "#FAE28C", "#FDB28F", "#FE9392")
-)
+# Subset for visualization (downsample)
+subobj <- subset(subobj, downsample = 150)
 
 # Plot heatmap
-Heatmap(
-    data,
-    name = "Ro/e",
-    col = col_fun2,
-    # Legend styling
-    heatmap_legend_param = list(
-        legend_height = unit(3, "cm"),
-        grid_width = unit(0.4, "cm"),
-        labels_gp = gpar(
-            col = "gray20",
-            fontsize = 8
-        )
-    ),
-    # Cell annotation styling
-    cell_fun = function(j, i, x, y, width, height, fill) {
-        grid.text(
-            p[i, j], x = x, y = y, vjust = 0.7,
-            gp = gpar(fontsize = 13, col = "black")
-        )
-    }
+plot_heatmap(
+    dataset = subobj,
+    markers = markers,
+    hm_colors = c("white", "grey", "firebrick3"),
+    sort_var = c("celltype"),
+    anno_var = c("celltype", "group1", "sampleid", "patients"),
+    anno_colors = list(my_cols, "Set2", my36colors, "Set3")
 )
 
 
@@ -193,24 +170,33 @@ combined_plot <- p + side_p +
     plot_layout(nrow = 1, widths = c(7, 3))
 
 
-############# Fig1F
+############# Fig1F - Ro/e enrichment heatmap
+
 library(ComplexHeatmap)
 library(circlize)
+library(grid)
 
+# Load Ro/e distribution function
 source("distribution_Roe.R")
-meta = sce.all@meta.data
-roe= calTissueDist(
-  dat.tb = meta,
-  byPatient = F,
-  colname.cluster = "celltype",
-  colname.patient = "patients",
-  colname.tissue = "group1",
-  method = "chisq",
-  min.rowSum = 0
+
+# Extract metadata
+meta <- sce.all@meta.data
+
+# Calculate Ro/e enrichment
+roe <- calTissueDist(
+    dat.tb = meta,
+    byPatient = FALSE,
+    colname.cluster = "celltype",
+    colname.patient = "patients",
+    colname.tissue = "group1",
+    method = "chisq",
+    min.rowSum = 0
 )
 
+# Convert to data frame
 roe_df <- as.data.frame.matrix(roe)
 
+# Generate annotation symbols
 p=roe_df
 p[p > 1] <- "+++"
 p[p> 0.8 & p <= 1] <- "++"
@@ -218,6 +204,7 @@ p[p>=0.2 & p <= 0.8] <- "+"
 p[p> 0 & p < 0.2] <- "+/−"
 p[p==0] <- "−"
 
+# Define color scale
 col_fun2 = colorRamp2(c(0, 0.2,0.8,1, 2.023587), c("#3367A2", "#7FD0D8", "#FAE28C", "#FDB28F", "#FE9392"))
 
 cellwidth = 1
@@ -227,6 +214,7 @@ rn = dim(roe_df)[1]
 w=cellwidth*cn
 h=cellheight*rn
 
+# Plot heatmap
 Heatmap(roe_df,name ="Ro/e", col = col_fun2,
         heatmap_legend_param = list(legend_height = unit(3, "cm"),
                                     grid_width = unit(0.4, "cm"),
@@ -237,8 +225,6 @@ Heatmap(roe_df,name ="Ro/e", col = col_fun2,
                       gp = gpar(fontsize = 13,col="black"))
         })
 		
-
-
 
 ############# Fig1G - Relative frequencies comparison (T_NK cells & Plasma)
 
@@ -294,3 +280,95 @@ p2 <- plot_group_comparison(df_ratio, "Plasma", y_limit = 8)
 
 # Combine
 p1 | p2
+
+
+############# Fig1H - KEGG pathway enrichment (MA vs PBMC)
+
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(ReactomePA)
+library(ggplot2)
+library(stringr)
+library(COSG)
+library(dplyr)
+
+# Set default assay and identity
+DefaultAssay(sce.all) <- "RNA"
+Idents(sce.all) <- sce.all$group1
+
+# COSG marker detection between AF and PBMC
+af_pbmc_marker_cosg <- cosg(
+    sce.all,
+    groups = c("MA", "PBMC"),
+    assay = "RNA",
+    slot = "data",
+    mu = 1,
+    remove_lowly_expressed = TRUE,
+    expressed_pct = 0.1,
+    n_genes_user = 100
+)
+
+# Convert gene symbols to Entrez IDs
+symbols_list <- af_pbmc_marker_cosg[[1]]
+x <- lapply(symbols_list, function(y) {
+    bitr(
+        y,
+        fromType = "SYMBOL",
+        toType = "ENTREZID",
+        OrgDb = org.Hs.eg.db
+    )[, 2]
+})
+
+# Pad to equal length
+max_len <- max(sapply(x, length))
+my_list <- lapply(x, function(x) {
+    if (length(x) < max_len) {
+        c(x, rep(NA, max_len - length(x)))
+    } else {
+        x
+    }
+})
+
+# Build dataframe
+gene <- as.data.frame(my_list)
+colnames(gene) <- names(x)
+
+# KEGG enrichment
+af_pbmc_KEGG <- compareCluster(
+    gene,
+    fun = "enrichKEGG",
+    organism = "hsa",
+    pvalueCutoff = 0.05
+)
+
+# Format KEGG results
+af_pbmc_KEGG_df <- af_pbmc_KEGG@compareClusterResult
+af_pbmc_KEGG_df$GeneRatio <- sapply(
+    strsplit(af_pbmc_KEGG_df$GeneRatio, "/"),
+    function(x) as.numeric(x[1]) / as.numeric(x[2])
+)
+
+# Select top pathways
+af_pbmc_KEGG_df <- af_pbmc_KEGG_df[c(1, 2, 4, 6, 9, 11, 15, 17, 18, 23), ]
+order <- unique(af_pbmc_KEGG_df$Description)
+af_pbmc_KEGG_df$Description <- factor(af_pbmc_KEGG_df$Description, levels = order)
+
+# Plot bubble chart
+ggplot(af_pbmc_KEGG_df, aes(x = Cluster, y = Description)) +
+    geom_point(aes(size = GeneRatio, color = p.adjust)) +
+    scale_color_gradientn(
+        colors = rev(c("#3367A2", "#7FD0D8", "#FAE28C", "#FDB28F", "#FE9392")),
+        name = "p.adjust"
+    ) +
+    scale_size_continuous(range = c(3, 8), name = "GeneRatio") +
+    theme_bw() +
+    theme(
+        axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid.major = element_line(color = "grey90"),
+        legend.position = "right"
+    ) +
+    labs(
+        title = "",
+        subtitle = ""
+    )
