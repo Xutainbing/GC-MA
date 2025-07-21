@@ -222,8 +222,8 @@ library(org.Hs.eg.db)
 sce.Bcell_bm <- subset(sce.Bcell, CellType == "B mem")
 Idents(sce.Bcell_bm) <- "group1"
 
-# Differential gene expression between AF and PBMC groups
-deg_bm <- FindMarkers(sce.Bcell_bm, ident.1 = "AF", ident.2 = "PBMC", 
+# Differential gene expression between MA and PBMC groups
+deg_bm <- FindMarkers(sce.Bcell_bm, ident.1 = "MA", ident.2 = "PBMC", 
                       min.pct = 0.25, logfc.threshold = 0.25)
 deg_bm <- deg_bm[order(deg_bm$avg_log2FC, decreasing = TRUE), ]
 deg_genes <- rownames(deg_bm)
@@ -284,5 +284,151 @@ GOBubble(circ_data,
 ## The code is the same as Fig. 2H.
 
 
-############# Fig3H - 
+############# Fig3H - UMAP distribution of clonal expansion in B cells
 ## The code is the same as Fig. 2D.
+
+
+############# Fig3K - Isotype distribution in memory B cells
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(ggpubr)
+
+# Merge clonotype and B cell metadata
+df <- do.call(rbind, lapply(combined, as.data.frame))
+rownames(df) <- df$barcode
+meta <- sce.Bcell@meta.data
+
+df <- df[rownames(df) %in% rownames(meta), ]
+meta <- meta[rownames(df), ]
+stopifnot(identical(rownames(df), rownames(meta)))
+
+df3 <- cbind(df[, c("IGH", "Tissue")], meta[, c("CTgene", "sampleid", "group1", "CellType")])
+df3 <- df3[!is.na(df3$IGH), ]
+
+# Assign isotype based on IGH sequence
+df3 <- df3 %>%
+  mutate(Isotype = case_when(
+    str_detect(IGH, "IGHM") ~ "IgM",
+    str_detect(IGH, "IGHA") ~ "IgA",
+    str_detect(IGH, "IGHD") ~ "IgD",
+    str_detect(IGH, "IGHG") ~ "IgG",
+    TRUE ~ "Other"
+  ))
+
+# Calculate frequency
+stats <- df3 %>%
+  group_by(sampleid, CellType, Isotype) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(sampleid, CellType) %>%
+  mutate(frequency = count / sum(count)) %>%
+  ungroup()
+
+# Plot for memory B cells
+ggplot(stats %>% filter(CellType == "B mem"), 
+       aes(x = Isotype, y = frequency)) +
+  geom_boxplot(fill = my_cols[5], width = 0.6) +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 2, color = "black") +
+  stat_compare_means(method = "kruskal.test", label = "p.format", label.y = 0.2) +
+  theme_minimal(base_size = 14) +
+  labs(title = "Isotype distribution in memory B cells",
+       x = NULL, y = "Relative Frequency") +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA),
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black", linewidth = 0.6),
+    axis.ticks = element_line(color = "black"),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "none"
+  )
+
+
+############# Fig3L - Hallmark pathway enrichment (GSVA) in B cell subtypes
+
+library(Seurat)
+library(GSVA)
+library(GSEABase)
+library(msigdbr)
+library(readxl)
+library(dplyr)
+library(stringr)
+library(pheatmap)
+
+# Load hallmark gene sets
+hallmark_sets <- msigdbr(species = "human", category = "H") %>%
+  split(x = .$gene_symbol, f = .$gs_name)
+
+# Subset B cells in malignant ascites (MA), excluding AtM B
+sce_bcell_ma <- subset(sce.Bcell, subset = group1 == "MA" & CellType != "AtM B")
+
+# Get normalized expression matrix
+expr_mat <- as.matrix(sce_bcell_ma@assays$RNA@data)
+
+# Run GSVA
+gsva_scores <- gsva(expr_mat, 
+                    gset.idx.list = hallmark_sets, 
+                    method = "gsva", 
+                    kcdf = "Gaussian", 
+                    mx.diff = TRUE)
+
+# Format GSVA result
+gsva_scores <- t(gsva_scores)
+colnames(gsva_scores) <- substring(colnames(gsva_scores), 10)
+gsva_scores <- gsva_scores[rownames(sce_bcell_ma@meta.data), , drop = FALSE]
+
+# Add cell type annotation
+gsva_scores <- data.frame(gsva_scores)
+gsva_scores$CellType <- sce_bcell_ma$CellType
+
+# Calculate average enrichment per cell type
+gsva_avg <- gsva_scores %>%
+  group_by(CellType) %>%
+  summarise(across(everything(), mean)) %>%
+  column_to_rownames("CellType") %>%
+  t() %>%
+  as.data.frame()
+
+# Format row names
+rownames(gsva_avg) <- gsub("_", " ", str_to_title(rownames(gsva_avg)))
+
+# Load hallmark category annotations
+anno <- read_excel("scRNA-seq/GC_AF/data/hallmark.xlsx") %>%
+  column_to_rownames("Hallmark.Name") %>%
+  arrange(Process.Category)
+rownames(anno) <- rownames(anno)
+anno <- anno["Process.Category", drop = FALSE]
+
+# Match annotation order to matrix
+gsva_avg <- gsva_avg[rownames(anno), ]
+
+# Plot heatmap
+pheatmap(gsva_avg,
+         scale = "row",
+         clustering_method = "ward.D",
+         cluster_rows = FALSE,
+         cluster_cols = TRUE,
+         annotation_row = anno,
+         show_rownames = TRUE,
+         show_colnames = TRUE,
+         annotation_names_row = FALSE,
+         gaps_row = c(3,9,12,19,26,31,37,50),
+         add_lines_row = c(3,9,12,19,26,31,37,50),
+         color = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(100)),
+         border = FALSE,
+         fontsize = 14,
+         legend = TRUE,
+         legend_args = list(legend = "right"))
+
+
+############# Fig3M-N - 
+## The code is the same as Fig. 2L.
+
+
+
+
+
+
+
+
+
