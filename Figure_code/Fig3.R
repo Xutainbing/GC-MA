@@ -10,6 +10,11 @@ sce.Bcell <- readRDS("scRNA-seq/GC_AF/data/sce.Bcell.rds")
 my_cols <- c('#87cdcb','#d5e9e8','#abaad4','#e7e7f3','#f4b3cb','#96a8d6',
              '#FDB28F','#B49FDC','#FE9392','#3367A2','#FAE28C','#84a3c7','#FDE6D9')
 
+my36colors <-c('#E5D2DD', '#53A85F', '#F1BB72', '#F3B1A0', '#D6E7A3', '#57C3F3', '#476D87', '#E95C59', '#E59CC4', '#AB3282', 
+             '#23452F', '#BD956A', '#8C549C', '#585658', '#9FA3A8', '#E0D4CA', '#5F3D69', '#C5DEBA', '#58A4C3', '#E4C755', '#F7F398', 
+             '#AA9A59', '#E63863', '#E39A35', '#C1E6F3', '#6778AE', '#91D0BE', '#B53E2B', '#712820', '#DCC1DD', '#CCE0F5', 
+              '#CCC9E6', '#625D9E', '#68A180', '#3A6963', '#968175')
+
 # Plot UMAP colored by CellType
 DimPlot(sce.Bcell, group.by = "CellType", cols = my_cols, pt.size = 1) +
   labs(x = "UMAP1", y = "UMAP2", title = NULL) +
@@ -131,7 +136,7 @@ plot_group_comparison <- function(data, celltype_name, y_limit) {
             panel.border = element_rect(color = "black", fill = NA, linewidth = 0.6)
         ) +
         ylim(0, y_limit) +
-        scale_color_manual(values = my_cols, limits = sample_names) +
+        scale_color_manual(values = my36colors, limits = sample_names) +
         scale_shape_manual(values = custom_shapes) +
         stat_compare_means(
             comparisons = list(c("MA", "PBMC")),
@@ -143,14 +148,14 @@ plot_group_comparison <- function(data, celltype_name, y_limit) {
 }
 
 # Draw plots
-p1 <- plot_group_comparison(df_ratio, "B mem", y_limit = 80)
-p2 <- plot_group_comparison(df_ratio, "AtM B", y_limit = 8)
+p1 <- plot_group_comparison(df_ratio, "B mem", y_limit = 70)
+p2 <- plot_group_comparison(df_ratio, "AtM B", y_limit = 20)
 
 # Combine
 p1 | p2
 
 
-
+############# Fig3D
 
 
 
