@@ -280,7 +280,9 @@ GOBubble(circ_data,
   coord_cartesian(xlim = c(-3, 3), ylim = c(0, 12), expand = FALSE)
 
 
+############# Fig3G - Pseudotime trajectory analysis for B cells using monocle3
+## The code is the same as Fig. 2H.
 
 
-
-
+############# Fig3H - 
+## The code is the same as Fig. 2D.
