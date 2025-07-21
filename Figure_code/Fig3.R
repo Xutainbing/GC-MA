@@ -78,7 +78,61 @@ ggplot(data, aes(x = Feature, y = CellType)) +
   )
 
 
-############# Fig3C
+############# Fig3C - Relative frequencies comparison (B mem & AtM B cells)
+
+library(ggplot2)
+library(ggpubr)
+library(ggsignif)
+library(patchwork)
+
+# Define sample order and point shapes
+sample_names <- unique(df$ID)
+custom_shapes <- c(16, 17)
+
+# Function to draw boxplot with statistics
+plot_group_comparison <- function(data, celltype_name, y_limit) {
+    df_sub <- data %>% filter(celltype == celltype_name)
+    
+    ggplot(df_sub, aes(x = group, y = percentage)) +
+        geom_boxplot(fill = NA, width = 0.5, position = position_dodge(0.75)) +
+        geom_jitter(
+            aes(color = ID, shape = group),
+            size = 3, alpha = 0.5,
+            position = position_jitter(width = 0.2)
+        ) +
+        labs(
+            x = NULL,
+            y = "Relative Frequency (%)",
+            title = celltype_name
+        ) +
+        theme_minimal(base_size = 13) +
+        theme(
+            panel.grid = element_blank(),
+            axis.line = element_line(color = "black"),
+            axis.ticks = element_line(color = "black"),
+            plot.title = element_text(hjust = 0.5),
+            legend.position = "none",
+            panel.border = element_rect(color = "black", fill = NA, linewidth = 0.6)
+        ) +
+        ylim(0, y_limit) +
+        scale_color_manual(values = my_cols, limits = sample_names) +
+        scale_shape_manual(values = custom_shapes) +
+        stat_compare_means(
+            comparisons = list(c("MA", "PBMC")),
+            method = "wilcox.test",
+            label = "p.format",
+            tip.length = 0.01,
+            size = 3
+        )
+}
+
+# Draw plots
+p1 <- plot_group_comparison(df_ratio, "B mem", y_limit = 80)
+p2 <- plot_group_comparison(df_ratio, "AtM B", y_limit = 8)
+
+# Combine
+p1 | p2
+
 
 
 
