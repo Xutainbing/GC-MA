@@ -27,3 +27,67 @@ DimPlot(sce.Bcell, group.by = "CellType", cols = my_cols, pt.size = 1) +
   annotate("text", x = -Inf, y = -Inf, label = "n = 4237 cells", 
            hjust = -0.1, vjust = -0.5, size = 5, color = "black", fontface = "italic")
 
+
+############# Fig3B - DotPlot of B cell subtype markers
+
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+
+# Define marker genes for B cell subtypes
+Bcells_markers <- list(
+  Naive = c('MS4A1', 'CCR7', 'TCL1A', 'IL4R'),
+  Mem = c('AIM2', 'TNFRSF13B'),
+  Plasma = c('CD38', 'MZB1', 'XBP1'),
+  Cycling = c('MKI67', 'TOP2A'),
+  Atm = c('FCRL5', 'ITGAX', 'ZEB2', 'FGR')
+)
+
+# Generate DotPlot and get data
+p_all_markers <- DotPlot(sce.Bcell, features = Bcells_markers, assay = "RNA", group.by = "CellType") + 
+  coord_flip()
+
+data <- p_all_markers$data
+
+# Rename columns for clarity
+colnames(data) <- c("AvgExpUnscaled", "PctExpressed", "Feature", "CellType", "AvgExpression", "Group")
+
+# Set factor levels for ordering
+data$CellType <- factor(data$CellType, levels = rev(c("B naive", "B mem", "Plasma", "Plasma cycling", "AtM B")))
+
+# Maintain feature order within groups
+data <- data %>%
+  group_by(Group) %>%
+  mutate(Feature = factor(Feature, levels = unique(Feature))) %>%
+  ungroup()
+
+# Plot
+ggplot(data, aes(x = Feature, y = CellType)) +
+  geom_point(aes(size = PctExpressed, fill = AvgExpression), shape = 21, stroke = 0.2) +
+  scale_size_continuous(range = c(1, 10)) +
+  scale_fill_gradient2(low = "#F8F8FF", mid = "grey", high = "#E54924", midpoint = 0) +
+  facet_grid(. ~ Group, scales = "free_x", space = "free_x") +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    strip.text = element_text(size = 14),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_blank(),
+    panel.spacing.x = unit(1, "lines")
+  )
+
+
+############# Fig3C
+
+
+
+
+
+
+
+
+
+
+
+
