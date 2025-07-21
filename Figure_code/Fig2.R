@@ -98,15 +98,139 @@ ht <- GroupHeatmap(
 ht$plot
 
 
-############# Fig2C
+############# Fig2C - Ro/e distribution for T/NK subclusters between AF and PBMC
 
-meta = sce.Tcell2@meta.data
-roe= calTissueDist(
-  dat.tb = meta,
-  byPatient = F,
-  colname.cluster = "CellType2",
-  colname.patient = "patients",
-  colname.tissue = "group1",
-  method = "chisq",
-  min.rowSum = 0
+library(ggplot2)
+
+# Load Ro/e distribution calculation function
+source("distribution_Roe.R")
+
+# Extract metadata
+meta <- sce.Tcell@meta.data
+
+# Compute Ro/e enrichment score
+roe <- calTissueDist(
+    dat.tb = meta,
+    byPatient = FALSE,
+    colname.cluster = "CellType2",
+    colname.patient = "patients",
+    colname.tissue = "group1",
+    method = "chisq",
+    min.rowSum = 0
 )
+
+# Format result as data frame
+roe_df <- as.data.frame.matrix(roe)
+roe_df$CellType <- rownames(roe_df)
+
+# Reshape for plotting
+long_data <- roe_df %>%
+    pivot_longer(
+        cols = c("MA", "PBMC"),
+        names_to = "Group",
+        values_to = "Expression"
+    )
+
+# Add enrichment/depletion annotation
+long_data$Type <- ifelse(long_data$Expression > 1, "Enrichment", "Depletion")
+
+# Plot bubble chart
+ggplot(long_data, aes(x = Group, y = CellType, size = Expression, fill = Type)) +
+    geom_point(shape = 21, color = "black", alpha = 0.85) +
+    scale_size_continuous(
+        range = c(3, 12),
+        breaks = c(0.2, 0.8, 1, 1.5, 2, 3),
+        name = "Ro/e"
+    ) +
+    scale_fill_manual(
+        values = c("Enrichment" = "#f4b3cb", "Depletion" = "#abaad4"),
+        name = NULL
+    ) +
+    labs(
+        x = NULL,
+        y = NULL
+    ) +
+    theme_minimal(base_family = "STHeiti") +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.8)
+    )
+
+
+############# Fig2D - UMAP distribution of clonal expansion in T/NK cells
+
+library(scRepertoire)
+library(ggplot2)
+library(Seurat)
+
+# Load all TCR contig files (19 samples from MA and PBMC)
+file_paths <- list.files(
+    "scRNA-seq/GC_AF/raw_data/TCR",
+    pattern = "_filtered_contig_annotations.csv$",
+    full.names = TRUE,
+    recursive = TRUE
+)
+contig_list <- lapply(file_paths, read.csv)
+
+# Define patient IDs and tissue origins (must match order of contig_list)
+samples <- c("RM001", "ZQQ003", "ZQQ003", "LFQ004", "S005ZJM",
+             "S006SWQ", "S006SWQ", "S007LXX", "S007LXX", "S008ZJF",
+             "S008ZJF", "S009ZHX", "S009ZHX", "S010YGF", "S010YGF",
+             "S012WRJ", "S012WRJ", "RM001", "S005ZJM")
+
+tissues <- c("PBMC", "MA", "PBMC", "PBMC", "PBMC",
+             "MA", "PBMC", "MA", "PBMC", "MA",
+             "PBMC", "MA", "PBMC", "MA", "PBMC",
+             "MA", "PBMC", "MA", "MA")
+
+# Combine all TCR data
+combined <- combineTCR(
+    contig_list,
+    samples = samples,
+    ID = tissues
+)
+
+# Add tissue type as a metadata variable
+combined <- addVariable(
+    combined,
+    variable.name = "Tissue",
+    variables = tissues
+)
+
+# Assign clonal expansion status to Seurat object
+sce.Tcell <- combineExpression(
+    combined,
+    sce.Tcell,
+    cloneCall = "strict",
+    group.by = "sample",
+    proportion = FALSE,
+    cloneSize = c(Single = 1,
+                  Small = 5,
+                  Medium = 20,
+                  Large = 100,
+                  Hyperexpanded = 500)
+)
+
+# Define custom color palette for cloneSize
+clone_colors <- rev(hcl.colors(n = 7, palette = "inferno", fixup = TRUE)[c(1, 3, 4, 5, 7)])
+
+# Plot clone size distribution on UMAP
+DimPlot(sce.Tcell, group.by = "cloneSize") +
+    scale_color_manual(values = clone_colors) +
+    labs(
+        x = "UMAP1",
+        y = "UMAP2",
+        title = NULL,
+        color = "Clone Size"
+    ) +
+    theme(
+        panel.border = element_rect(fill = NA, color = "black", linewidth = 2),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        text = element_text(size = 20),
+        legend.title = element_text(size = 15, face = "bold"),
+        legend.text = element_text(size = 12, face = "italic")
+    ) +
+    guides(colour = guide_legend(override.aes = list(size = 4)))
+
+
