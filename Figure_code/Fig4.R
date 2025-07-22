@@ -55,3 +55,44 @@ VlnPlot(sce.Myeloid, features = markers, group.by = "CellType2", pt.size = 0,
         axis.text.y = element_text(size = 14),
         axis.ticks.y = element_blank())
 
+
+############# Fig4E - PCA plot of average expression of DC subclusters (MA vs PBMC)
+
+library(Seurat)
+library(ggplot2)
+
+# Subset DCs
+dc_sub <- subset(sce.Myeloid, CellType2 %in% c('M01', 'M02', 'M03', 'M04'))
+dc_sub$group1 <- factor(dc_sub$group1, levels = c("MA", "PBMC"))
+Idents(dc_sub) <- "group1"
+DefaultAssay(dc_sub) <- "RNA"
+
+# Compute average expression per group per celltype
+avg_exp <- AverageExpression(dc_sub, add.ident = "CellType2")$RNA
+avg_exp <- avg_exp[is.finite(rowSums(avg_exp)), ]
+
+# PCA
+pca_res <- prcomp(t(avg_exp))
+pca_df <- as.data.frame(pca_res$x[, 1:2])
+pca_df$Group <- rep(c("MA", "PBMC"), each = 4)
+pca_df$CellType <- rep(c('M01', 'M02', 'M03', 'M04'), times = 2)
+
+# Define plot colors and shapes
+group_colors <- c("MA" = "#68A180", "PBMC" = "#3A6963")
+cell_shapes <- c(15, 16, 17, 18)  # Square, circle, triangle, diamond
+
+# Plot
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Group, shape = CellType)) +
+  geom_point(size = 4, alpha = 0.8) +
+  scale_color_manual(values = group_colors) +
+  scale_shape_manual(values = cell_shapes) +
+  labs(x = "PC1", y = "PC2") +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.border = element_rect(fill = NA, color = "black", linewidth = 1),
+    axis.line = element_blank(),
+    panel.grid = element_blank(),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 12)
+  ) +
+  guides(shape = guide_legend(override.aes = list(size = 4)))
