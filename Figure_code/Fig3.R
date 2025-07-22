@@ -280,14 +280,6 @@ GOBubble(circ_data,
   coord_cartesian(xlim = c(-3, 3), ylim = c(0, 12), expand = FALSE)
 
 
-############# Fig3G - Pseudotime trajectory analysis for B cells using monocle3
-## The code is the same as Fig. 2H.
-
-
-############# Fig3H - UMAP distribution of clonal expansion in B cells
-## The code is the same as Fig. 2D.
-
-
 ############# Fig3K - Isotype distribution in memory B cells
 
 library(dplyr)
@@ -419,7 +411,3 @@ pheatmap(gsva_avg,
          fontsize = 14,
          legend = TRUE,
          legend_args = list(legend = "right"))
-
-
-############# Fig3M-N - B cell subtype signature survival analysis (TCGA & GSE15459)
-## The code is the same as Fig. 2L.
